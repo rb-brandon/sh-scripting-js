@@ -1,18 +1,43 @@
 const opts = {
   monitor:xrandr_top,
   monitoroff:xrandr_off,
-  keyboard:keyboard_light,
-  keyboardoff:keyboard_light_off,
-  usage:usage,
-  profile:profile,
-  test:test
+  async keyboardoff() { await $`xset led off` },
+  keyboard: () => $`xset led on`,
+  async swhy() {
+    console.log('you smell like a fish monger', $)
+    await $`env`
+    return 42
+  },
+  usage,
+  async profile(argv) {
+    let tip = profiles, key_path=[]
+    while (0 !== argv.length) {
+      let k = argv.shift()
+      key_path.push(k)
+      if (undefined === tip[k]) {
+        console.log('Profiles:', key_path.join(' >> '), tip)
+        return
+      }
+      tip = tip[k]
+    }
+
+    if (tip[Symbol.iterator]) {
+      for (let step of tip)
+        await step()
+    } else {
+      console.log('Profiles:', key_path.join(' >> '), tip)
+    }
+  },
+  test,
 }
 
 const profiles = {
   work: {
-    on:[xrandr_top, keyboard_light],
-    off:[xrandr_off, keyboard_light_off]
-  }
+    on:[xrandr_top, opts.keyboard],
+    off:[xrandr_off, opts.keyboardoff]
+  },
+  swhy: {
+    secret: { in_dark: [() => console.log("SEMMLL:")] }}
 }
 
 function call_(f){return f()}
@@ -25,8 +50,6 @@ async function profile() {
 
 async function xrandr_top() { await $`xrandr --output HDMI-1 --auto --above eDP-1` }
 async function xrandr_off() { await $`xrandr --output HDMI-1 --off` }
-async function keyboard_light() { await $`xset led on` }
-async function keyboard_light_off() { await $`xset led off` }
 async function test() { await $`ls -la`.pipe(process.stdout) }
 async function usage() {
   console.log(
@@ -34,11 +57,12 @@ async function usage() {
     Object.keys(opts).map(e => `-- ${e}`)
   )}
 
-function process_args() {
-  let fn = opts[process.argv.slice(3).shift()]
-  return "function" === typeof fn 
-    ? fn
-    : opts["usage"]
+function process_args(argv) {
+  let fn = opts[argv.shift()] || opts.usage
+  return fn.bind(opts, argv)
 }
 
-await (process_args())()
+{
+  let fn_main = process_args(process.argv.slice(3))
+  await fn_main()
+}
